@@ -44,7 +44,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from classify import Classification
 from config_store import (
     apply_api_key_to_env,
+    get_setting,
     load_api_key,
+    set_setting,
 )
 from dialogs import ApiKeyDialog
 from llm_client import LLMClient
@@ -224,6 +226,15 @@ class MainWindow(QtWidgets.QMainWindow):
         op_row = QtWidgets.QHBoxLayout()
         op_row.setSpacing(10)
 
+        self.check_local_only = QtWidgets.QCheckBox("🔒 纯本地模式")
+        self.check_local_only.setToolTip(
+            "勾选后：仅用文件名分类，绝不上传任何材料内容到 DeepSeek。\n"
+            "适合涉密案件。代价：文件名无关键词的材料会归到「其他」需人工调整。"
+        )
+        self.check_local_only.setChecked(bool(get_setting("local_only", False)))
+        self.check_local_only.toggled.connect(self._on_local_only_toggled)
+        op_row.addWidget(self.check_local_only)
+
         self.check_auto_write = QtWidgets.QCheckBox("自动补写缺件（代理词 / 办案小结）")
         self.check_auto_write.setToolTip("缺第 8 项或第 11 项时，调用 LLM 自动撰写")
         op_row.addWidget(self.check_auto_write)
@@ -363,6 +374,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_info(f"已选择案件文件夹：{self.case_dir}")
         self.on_classify()
 
+    def _on_local_only_toggled(self, checked: bool):
+        set_setting("local_only", bool(checked))
+        if checked:
+            self.log_info("🔒 已开启纯本地模式：后续分类不会上传任何材料内容。")
+        else:
+            self.log_info("已关闭纯本地模式：文件名无法识别的材料将采样内容交 DeepSeek 判断。")
+
     def _validate_inputs(self) -> Optional[str]:
         if not self.case_dir or not self.case_dir.exists():
             return "请先选择案件文件夹"
@@ -385,8 +403,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress_bar.setFormat("准备扫描…")
         self.status.showMessage("扫描与分类中…")
 
-        llm = LLMClient()
-        self.log_info(f"LLM 状态：{'已就绪' if llm.ready else '不可用 — ' + (llm.init_error or '')}")
+        if self.check_local_only.isChecked():
+            llm = None
+            self.log_info("🔒 纯本地模式：仅用文件名分类，不上传任何内容。")
+        else:
+            llm = LLMClient()
+            self.log_info(f"LLM 状态：{'已就绪' if llm.ready else '不可用 — ' + (llm.init_error or '')}")
         self._classify_worker = ClassifyWorker(self.case_dir, self.combo_role.currentText(), llm)
         self._classify_worker.progress.connect(self._on_classify_progress)
         self._classify_worker.finished_ok.connect(self._on_classify_done)
@@ -546,6 +568,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
         auto_write = self.check_auto_write.isChecked()
+        if auto_write and self.check_local_only.isChecked():
+            QtWidgets.QMessageBox.information(
+                self,
+                "纯本地模式",
+                "已开启纯本地模式，自动补写需上传材料到 DeepSeek，本次将跳过补写。",
+            )
+            auto_write = False
         llm = LLMClient() if auto_write else None
         if auto_write and not llm.ready:
             QtWidgets.QMessageBox.warning(

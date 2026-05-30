@@ -13,13 +13,16 @@ import re
 import time
 from typing import Optional, Tuple
 
+import llm_cache
 from logger import get_logger
 
 log = get_logger()
 
 DEFAULT_MODEL = "deepseek-chat"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-MAX_RETRIES = 1
+MAX_RETRIES = 2
+REQUEST_TIMEOUT = 60.0       # 单次请求超时（秒），防止卡死并发线程
+RETRY_BASE_DELAY = 1.5       # 指数退避基数
 
 
 class LLMClient:
@@ -45,9 +48,14 @@ class LLMClient:
             log.warning("LLM 客户端未初始化：%s", self._init_error)
             return
         try:
-            self._client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+            self._client = OpenAI(
+                api_key=api_key,
+                base_url=DEEPSEEK_BASE_URL,
+                timeout=REQUEST_TIMEOUT,
+                max_retries=0,   # 自行管理重试与退避
+            )
             self._ready = True
-            log.info("LLM 客户端已就绪（DeepSeek，模型 %s）", self.model)
+            log.info("LLM 客户端已就绪（DeepSeek，模型 %s，超时 %.0fs）", self.model, REQUEST_TIMEOUT)
         except Exception as e:
             self._init_error = f"初始化 DeepSeek 客户端失败：{e}"
             log.error(self._init_error)
@@ -96,7 +104,8 @@ class LLMClient:
                 last_err = e
                 log.warning("LLM 调用失败 (第%d次): %s", attempt + 1, e)
                 if attempt < MAX_RETRIES:
-                    time.sleep(1.5)
+                    # 指数退避：1.5s, 3s, 6s ...
+                    time.sleep(RETRY_BASE_DELAY * (2 ** attempt))
         log.error("LLM 调用最终失败: %s", last_err)
         return None
 
@@ -109,6 +118,15 @@ class LLMClient:
         """让 LLM 判断文件应归入哪一项。返回 (category_id, confidence, reason)。"""
         if not self._ready or not sample_text.strip():
             return None
+
+        # 缓存：相同模型 + 文件名 + 内容 + 目录定义 → 直接复用，省钱提速
+        cache_key = llm_cache.make_key("classify", self.model, file_name, sample_text, categories_brief)
+        cached = llm_cache.get(cache_key)
+        if cached is not None:
+            try:
+                return int(cached[0]), float(cached[1]), str(cached[2])
+            except (TypeError, ValueError, IndexError):
+                pass  # 缓存格式异常则忽略，重新调用
 
         system = "你是一个中国律所的案件材料分类助手，只输出 JSON，不要解释。"
         user = (
@@ -131,6 +149,7 @@ class LLMClient:
             reason = str(data.get("reason", ""))[:120]
             cat_id = max(1, min(13, cat_id))
             conf = max(0.0, min(1.0, conf))
+            llm_cache.set(cache_key, [cat_id, conf, reason])
             return cat_id, conf, reason
         except (TypeError, ValueError):
             log.warning("LLM 分类返回字段异常：%s", data)
@@ -145,6 +164,16 @@ class LLMClient:
         """判断诉讼文书是我方还是对方提交。返回 (我方|对方, confidence)。"""
         if not self._ready or not sample_text.strip():
             return None
+
+        cache_key = llm_cache.make_key("side", self.model, file_name, sample_text, role)
+        cached = llm_cache.get(cache_key)
+        if cached is not None:
+            try:
+                side_c = str(cached[0])
+                if side_c in ("我方", "对方"):
+                    return side_c, float(cached[1])
+            except (TypeError, ValueError, IndexError):
+                pass
 
         system = "你是一个中国律师助手，擅长识别诉讼文书的提交方。只输出 JSON。"
         user = (
@@ -169,7 +198,9 @@ class LLMClient:
             conf = float(data.get("confidence", 0.6))
         except (TypeError, ValueError):
             conf = 0.6
-        return side, max(0.0, min(1.0, conf))
+        conf = max(0.0, min(1.0, conf))
+        llm_cache.set(cache_key, [side, conf])
+        return side, conf
 
     def write_document(self, system: str, prompt: str, max_tokens: int = 4000) -> Optional[str]:
         """用于补写代理词/办案小结。"""

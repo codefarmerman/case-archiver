@@ -9,7 +9,7 @@ import os
 
 from PyQt5 import QtWidgets
 
-from config_store import config_file_path, save_api_key
+from config_store import key_storage_location, save_api_key
 from llm_client import LLMClient
 
 
@@ -56,7 +56,9 @@ class ApiKeyDialog(QtWidgets.QDialog):
         layout.addLayout(row)
 
         warn = QtWidgets.QLabel(
-            f"⚠ Key 将明文保存至 {config_file_path()}，请勿分享或提交到 Git。"
+            f"🔒 Key 将保存至：{key_storage_location()}\n"
+            "隐私：分类时会把材料前几页内容上传至 DeepSeek 用于判断。"
+            "如不希望上传，请在主界面勾选「纯本地模式」。"
         )
         warn.setObjectName("dialogWarn")
         warn.setWordWrap(True)
