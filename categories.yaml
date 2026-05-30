@@ -1,0 +1,113 @@
+# 13项卷内目录分类规则 v2.0
+# 经与用户逐项确认后的最终版
+
+categories:
+  - id: 1
+    name: 收案审查表
+    short_name: 收案审查表
+    keywords: [收案审查, 收案审查表]
+    max_files: 1
+
+  - id: 2
+    name: 收费凭证
+    short_name: 收费凭证
+    keywords: [发票, 收据, 收费, 银行回单, 转账凭证, 付款凭证, 律师费]
+    exclude: [合同]
+    max_files: 1
+
+  - id: 3
+    name: 法律事务委托合同、授权委托书
+    short_name: 委托合同
+    keywords: [委托合同, 授权委托, 委托书, 法律服务合同, 风险代理协议]
+    max_files: 2
+
+  - id: 4
+    name: 起诉书、申请书、上诉书、答辩书、反诉状、再审申请书、抗诉书
+    short_name: 诉讼文书
+    keywords: [起诉状, 起诉书, 民事起诉, 刑事起诉, 行政起诉, 仲裁申请,
+               申请书, 上诉状, 上诉书, 答辩状, 答辩书, 反诉状, 反诉申请,
+               再审申请, 抗诉书]
+    exclude: [庭审, 笔录, 代理词, 辩护词]
+    # 特殊处理：需LLM内容采样判断我方/对方
+    requires_role_detection: true
+    # 排序权重：按诉讼推进顺序
+    sort_weights:
+      起诉: 1
+      仲裁申请: 1
+      答辩: 2
+      反诉: 3
+      上诉: 4
+      再审: 5
+      抗诉: 6
+
+  - id: 5
+    name: 阅卷笔录
+    short_name: 阅卷笔录
+    keywords: [阅卷笔录, 阅卷]
+    exclude: [庭审, 开庭]
+    note: 仅刑事案件有，民事案件该项为空
+    max_files: 1
+
+  - id: 6
+    name: 证据材料
+    short_name: 证据材料
+    keywords: [证据目录, 证据, 鉴定报告, 鉴定意见, 公证书, 司法鉴定]
+    note: 文件名含"证据目录"即命中，不管后面是否带"附件"
+    max_files: 5
+
+  - id: 7
+    name: 出庭通知书
+    short_name: 出庭通知
+    keywords: [开庭传票, 传票, 出庭通知, 开庭通知, 应诉通知]
+    max_files: 2
+
+  - id: 8
+    name: 代理词
+    short_name: 代理词
+    keywords: [代理词, 辩护词, 代理意见, 辩护意见]
+    exclude: [庭审, 笔录]
+    max_files: 2
+    auto_write_if_missing: true
+    auto_write_prompt: |
+      你是一名资深中国律师。请根据以下诉讼文书，从{role}（我方）的立场撰写代理词。
+      要求：结构完整（案件事实→争议焦点→法律分析→代理意见），引用具体法条，语言专业严谨。
+
+  - id: 9
+    name: 庭审笔录
+    short_name: 庭审笔录
+    keywords: [庭审笔录, 开庭笔录, 庭审记录]
+    exclude: [阅卷]
+
+  - id: 10
+    name: 判决书、裁定书、裁决书、调解书、上诉书
+    short_name: 裁判文书
+    keywords: [判决书, 裁定书, 裁决书, 调解书, 决定书, 行政处罚决定, 不予受理]
+    max_files: 2
+
+  - id: 11
+    name: 办案小结
+    short_name: 办案小结
+    keywords: [办案小结, 结案报告, 结案小结, 案件总结, 办案总结]
+    max_files: 1
+    auto_write_if_missing: true
+    auto_write_prompt: |
+      你是一名资深中国律师。请根据以下全案材料撰写办案小结。
+      要求包括：案件基本情况、代理过程、争议焦点及处理、裁判结果、办案体会和经验总结。
+      语言简洁专业，篇幅约800-1500字。
+
+  - id: 12
+    name: 服务质量意见反馈表
+    short_name: 反馈表
+    keywords: [服务质量, 意见反馈, 满意度, 客户反馈, 反馈表]
+    max_files: 1
+
+  - id: 13
+    name: 其他
+    short_name: 其他
+    keywords: []  # 兜底项，前12项未命中的归这里
+
+# LLM分类器设置
+classifier:
+  sample_chars: 800
+  confidence_threshold: 0.7
+  model: deepseek-chat

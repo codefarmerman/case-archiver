@@ -1,0 +1,25 @@
+[project]
+name = "case-archiver"
+version = "2.2.0"
+description = "律师案件自动归档程序 — 按 13 项卷内目录标准分类、重命名、生成卷内目录"
+requires-python = ">=3.9"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+exclude = ["venv", "build", "dist", ".venv"]
+
+[tool.ruff.lint]
+# E/F: pyflakes+pycodestyle, I: isort, B: bugbear
+# 不启用 UP（pyupgrade）：项目兼容 py39，保留 List/Optional 写法
+select = ["E", "F", "I", "B"]
+ignore = [
+    "E501",   # 行长由 line-length 控制
+    "E402",   # 模块级 import 不在顶部（gui.py 需在 import PyQt5 前设环境变量）
+    "B008",   # 函数默认值调用（Qt 模式常见）
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
