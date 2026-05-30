@@ -5,7 +5,9 @@ $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Launcher   = Join-Path $ProjectDir "launcher.vbs"
 $PythonW    = Join-Path $ProjectDir "venv\Scripts\pythonw.exe"
 $GuiScript  = Join-Path $ProjectDir "gui.py"
-$IconSrc    = Join-Path $ProjectDir "venv\Scripts\python.exe"
+# 优先用项目自带图标，缺失时回退到 python 解释器图标
+$IconIco    = Join-Path $ProjectDir "icon.ico"
+if (Test-Path $IconIco) { $IconSrc = $IconIco } else { $IconSrc = Join-Path $ProjectDir "venv\Scripts\python.exe" }
 
 if (-not (Test-Path $Launcher))  { Write-Host "[ERROR] launcher.vbs missing" -ForegroundColor Red; Read-Host; exit 1 }
 if (-not (Test-Path $GuiScript)) { Write-Host "[ERROR] gui.py missing"      -ForegroundColor Red; Read-Host; exit 1 }
@@ -24,7 +26,7 @@ $Shortcut.TargetPath       = "wscript.exe"
 $Shortcut.Arguments        = '"' + $Launcher + '"'
 $Shortcut.WorkingDirectory = $ProjectDir
 $Shortcut.WindowStyle      = 1
-$Shortcut.Description      = "Case Archiver v2.1"
+$Shortcut.Description      = "律师案件归档 Case Archiver"
 $Shortcut.IconLocation     = $IconSrc + ",0"
 $Shortcut.Save()
 

@@ -717,13 +717,37 @@ class _LogBridge(QtCore.QObject):
     line = QtCore.pyqtSignal(str)
 
 
+def _app_icon() -> QtGui.QIcon:
+    """加载应用图标（优先 .ico 含多分辨率，回退 .png）。"""
+    for name in ("icon.ico", "icon.png"):
+        p = resource_path(name)
+        if p.exists():
+            return QtGui.QIcon(str(p))
+    return QtGui.QIcon()
+
+
+def _set_taskbar_app_id():
+    """让 Windows 任务栏使用应用自身图标而非 python 解释器图标。"""
+    if sys.platform.startswith("win"):
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "casearchiver.app.2"
+            )
+        except Exception:
+            pass
+
+
 def main():
     get_logger()
     apply_api_key_to_env()
+    _set_taskbar_app_id()
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setStyleSheet(_load_stylesheet())
+    icon = _app_icon()
+    app.setWindowIcon(icon)
     win = MainWindow()
+    win.setWindowIcon(icon)
     win.show()
     sys.exit(app.exec_())
 

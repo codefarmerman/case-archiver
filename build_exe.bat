@@ -22,11 +22,14 @@ pyinstaller ^
     --onefile ^
     --windowed ^
     --name 案件归档 ^
+    --icon icon.ico ^
     --collect-submodules openai ^
     --collect-submodules pdfplumber ^
     --collect-submodules docx ^
     --add-data "categories.yaml;." ^
     --add-data "style.qss;." ^
+    --add-data "icon.ico;." ^
+    --add-data "icon.png;." ^
     gui.py || goto :err
 
 echo.
@@ -35,6 +38,7 @@ echo 可执行文件：dist\案件归档.exe
 echo 请将 categories.yaml 与 style.qss 复制到 dist\ 目录一起分发
 copy /y categories.yaml dist\categories.yaml >nul
 copy /y style.qss dist\style.qss >nul
+copy /y icon.ico dist\icon.ico >nul
 echo ======================
 exit /b 0
 
