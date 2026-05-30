@@ -41,6 +41,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from _version import __version__
 from classify import Classification
 from config_store import (
     apply_api_key_to_env,
@@ -51,7 +52,7 @@ from config_store import (
 from dialogs import ApiKeyDialog
 from llm_client import LLMClient
 from logger import attach_qt_handler, get_logger
-from paths import app_root, config_path
+from paths import config_path, resource_path
 from ui_widgets import (
     LOW_CONF_THRESHOLD,
     ConfidenceBadge,
@@ -71,7 +72,7 @@ def _load_stylesheet() -> str:
     """从外部 style.qss 读取样式表，便于不改 Python 即可调整 UI。
     打包/缺失时回退到内置最小样式。"""
     try:
-        qss_path = app_root() / "style.qss"
+        qss_path = resource_path("style.qss")
         if qss_path.exists():
             return qss_path.read_text(encoding="utf-8")
     except Exception as e:
@@ -304,10 +305,10 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.about(
             self,
             "关于 律师案件归档",
-            "<h3>律师案件归档 v2.2</h3>"
+            f"<h3>律师案件归档 v{__version__}</h3>"
             "<p>按中国律所标准 <b>13 项卷内目录</b>自动分类、重命名、生成卷内目录。</p>"
             "<p>支持 <b>DeepSeek</b> 大模型自动补写代理词与办案小结。</p>"
-            "<p style='color:#656d76; font-size:9pt;'>UI 重设计 · 拖拽支持 · 置信度徽章</p>",
+            "<p style='color:#656d76; font-size:9pt;'>隐私本地模式 · Key 加密 · 归档审计清单</p>",
         )
 
     def _refresh_api_key_status(self):

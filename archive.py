@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from _version import __version__
 from archive_engine import (
     auto_write_missing,
     copy_files,
@@ -34,7 +35,8 @@ CONFIG_PATH = Path(__file__).parent / "categories.yaml"
 
 def main():
     apply_api_key_to_env()
-    ap = argparse.ArgumentParser(description="律师案件自动归档程序 v2.0")
+    ap = argparse.ArgumentParser(description=f"律师案件自动归档程序 v{__version__}")
+    ap.add_argument("--version", action="version", version=f"案件归档 v{__version__}")
     ap.add_argument("case_dir", type=Path, help="案件原始材料文件夹路径")
     ap.add_argument("--case-no", required=True, help="案号")
     ap.add_argument("--case-name", required=True, help="案由/当事人")
@@ -49,7 +51,7 @@ def main():
 
     # ===== 第1步：扫描 =====
     print(f"\n{'='*60}")
-    print("  案件归档程序 v2.0")
+    print(f"  案件归档程序 v{__version__}")
     print(f"  案号: {args.case_no}")
     print(f"  案由: {args.case_name}")
     print(f"  我方: {args.role}")
