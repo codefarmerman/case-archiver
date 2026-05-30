@@ -409,6 +409,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             llm = LLMClient()
             self.log_info(f"LLM 状态：{'已就绪' if llm.ready else '不可用 — ' + (llm.init_error or '')}")
+        self._classify_llm = llm   # 留引用以便分类后读用量
         self._classify_worker = ClassifyWorker(self.case_dir, self.combo_role.currentText(), llm)
         self._classify_worker.progress.connect(self._on_classify_progress)
         self._classify_worker.finished_ok.connect(self._on_classify_done)
@@ -431,6 +432,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress_bar.setVisible(False)
         self.status.showMessage(f"分类完成：共 {len(results)} 份，低置信度 {low} 份")
         self.log_info(f"✓ 分类完成：{len(results)} 份，低置信度 {low} 份，请人工核对后点击「确认归档」")
+        llm = getattr(self, "_classify_llm", None)
+        if llm is not None and getattr(llm, "ready", False):
+            self.log_info(f"💰 {llm.usage_summary()}")
 
     def _on_classify_failed(self, err: str):
         self.btn_reclassify.setEnabled(True)

@@ -111,7 +111,7 @@ class Classifier:
                 c.note += f" | 角色: 对方({opp}) [文件名]"
                 return c
 
-        # 文件名无线索：按文书类型粗判
+        # 文件名无线索：按文书类型粗判（规则来自 yaml）
         side_guess = self._side_by_doc_type(filename, role)
         if side_guess:
             c.side = side_guess
@@ -137,19 +137,22 @@ class Classifier:
         c.note += " | 角色: 待确认"
         return c
 
-    @staticmethod
-    def _side_by_doc_type(filename: str, role: str) -> str:
-        """按文书类型粗判，无把握时返回空串。"""
-        if role in ("原告", "申请人"):
-            if "答辩" in filename:
-                return "对方"
-            if any(k in filename for k in ["起诉", "仲裁申请", "反诉", "上诉", "再审"]):
-                return "我方"
-        elif role in ("被告", "被申请人"):
-            if "答辩" in filename:
-                return "我方"
-            if any(k in filename for k in ["起诉", "仲裁申请"]):
-                return "对方"
+    def _side_by_doc_type(self, filename: str, role: str) -> str:
+        """按文书类型粗判我方/对方，规则来自 categories.yaml 第4项 side_rules。
+        无匹配规则时返回空串（交由 LLM 判断）。"""
+        rules = self._get_cat(4).get("side_rules", []) or []
+        for group in rules:
+            if role not in (group.get("roles") or []):
+                continue
+            # 收集命中的(side, 关键词)，按关键词长度取最具体的一个，确保确定性
+            hits = []
+            for side in ("我方", "对方"):
+                for kw in group.get(side, []) or []:
+                    if kw in filename:
+                        hits.append((len(kw), side))
+            if hits:
+                hits.sort(reverse=True)   # 最长关键词优先
+                return hits[0][1]
         return ""
 
     def _assign_sort_weight(self, c: Classification) -> Classification:

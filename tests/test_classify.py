@@ -61,6 +61,24 @@ def test_side_detection_plaintiff_dabian(clf, tmp_case_dir):
     assert c.side == "对方"
 
 
+def test_side_rules_from_yaml_defendant(clf, tmp_case_dir):
+    # 被告视角：答辩状是我方，起诉状是对方（规则来自 yaml side_rules）
+    p1 = tmp_case_dir / "答辩状.pdf"
+    p1.write_text("x", encoding="utf-8")
+    assert clf.classify(p1, role="被告").side == "我方"
+
+    p2 = tmp_case_dir / "民事起诉状.pdf"
+    p2.write_text("x", encoding="utf-8")
+    assert clf.classify(p2, role="被告").side == "对方"
+
+
+def test_side_rules_applicant(clf, tmp_case_dir):
+    # 申请人视角：仲裁申请是我方
+    p = tmp_case_dir / "仲裁申请书.pdf"
+    p.write_text("x", encoding="utf-8")
+    assert clf.classify(p, role="申请人").side == "我方"
+
+
 def test_side_by_role_in_filename(clf, tmp_case_dir):
     # 文件名直接含"被告"，原告视角 → 对方
     p = tmp_case_dir / "被告答辩状.pdf"

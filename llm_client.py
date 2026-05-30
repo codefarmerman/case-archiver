@@ -24,6 +24,11 @@ MAX_RETRIES = 2
 REQUEST_TIMEOUT = 60.0       # 单次请求超时（秒），防止卡死并发线程
 RETRY_BASE_DELAY = 1.5       # 指数退避基数
 
+# DeepSeek deepseek-chat 估算价格（元/百万 token，2025 标准时段，缓存未命中）
+# 仅用于粗略成本提示，非精确账单。官方价随时段/版本浮动。
+PRICE_INPUT_PER_M = 2.0
+PRICE_OUTPUT_PER_M = 8.0
+
 
 class LLMClient:
     """封装 DeepSeek 客户端。无 API Key 或 SDK 未装时所有方法返回 None。"""
@@ -33,7 +38,41 @@ class LLMClient:
         self._client = None
         self._ready = False
         self._init_error: Optional[str] = None
+        # 用量累计（线程安全）
+        import threading
+        self._usage_lock = threading.Lock()
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.api_calls = 0          # 实际发出的请求数（不含缓存命中）
         self._init()
+
+    def _add_usage(self, usage) -> None:
+        if not usage:
+            return
+        with self._usage_lock:
+            self.prompt_tokens += getattr(usage, "prompt_tokens", 0) or 0
+            self.completion_tokens += getattr(usage, "completion_tokens", 0) or 0
+            self.api_calls += 1
+
+    @property
+    def total_tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+    def estimated_cost_cny(self) -> float:
+        """粗略估算本会话花费（人民币元）。"""
+        return (
+            self.prompt_tokens / 1_000_000 * PRICE_INPUT_PER_M
+            + self.completion_tokens / 1_000_000 * PRICE_OUTPUT_PER_M
+        )
+
+    def usage_summary(self) -> str:
+        if self.api_calls == 0:
+            return "本次未发生 API 调用（全部命中缓存或纯本地）"
+        return (
+            f"本次 API 调用 {self.api_calls} 次，"
+            f"输入 {self.prompt_tokens} + 输出 {self.completion_tokens} = {self.total_tokens} tokens，"
+            f"约 ¥{self.estimated_cost_cny():.4f}"
+        )
 
     def _init(self) -> None:
         api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
@@ -91,6 +130,7 @@ class LLMClient:
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
                 resp = self._client.chat.completions.create(**kwargs)
+                self._add_usage(getattr(resp, "usage", None))
                 if resp.choices and resp.choices[0].message.content:
                     finish = getattr(resp.choices[0], "finish_reason", None)
                     if finish == "length":

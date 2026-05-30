@@ -19,6 +19,7 @@ from archive_engine import (
     generate_cover,
     make_output_dir,
     sort_all_results,
+    write_manifest,
 )
 from classify import Classification, Classifier
 from llm_client import LLMClient
@@ -145,6 +146,14 @@ class ArchiveWorker(QtCore.QThread):
 
             self.progress.emit("生成卷内目录 …")
             generate_cover(output_root, self.case_no, self.case_name, classified_files)
+
+            from datetime import datetime
+            write_manifest(
+                output_root, self.case_no, self.case_name, self.role,
+                classified_files, f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+            )
+            self.progress.emit("已生成归档清单（归档清单.json / .txt）")
+
             total = len([f for f in output_root.iterdir() if f.is_file()])
             self.finished_ok.emit(output_root, total)
         except Exception as e:

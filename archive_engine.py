@@ -90,8 +90,14 @@ def copy_files(
             shutil.copy2(c.file_path, target)
             classified_files.append({
                 "category_id": c.category_id,
+                "category_name": c.category_name,
                 "filename": c.file_path.name,
+                "new_name": target.name,
+                "original_path": str(c.file_path),
                 "side": c.side,
+                "confidence": round(c.confidence, 2),
+                "method": c.method,
+                "note": c.note,
                 "page_start": "",
             })
             if on_progress:
@@ -188,3 +194,57 @@ def generate_cover(
     cover_path = output_root / "00_卷内目录.docx"
     build_cover(cover_path, case_no, case_name, classified_files)
     return cover_path
+
+
+def write_manifest(
+    output_root: Path,
+    case_no: str,
+    case_name: str,
+    role: str,
+    classified_files: List[dict],
+    archived_at: str,
+) -> Path:
+    """写归档审计清单（JSON + 可读 TXT）：记录每份文件的归类依据，供事后追溯。
+    archived_at 由调用方传入（避免在引擎内取系统时间，便于测试与确定性）。"""
+    import json
+
+    manifest = {
+        "case_no": case_no,
+        "case_name": case_name,
+        "role": role,
+        "archived_at": archived_at,
+        "total": len(classified_files),
+        "files": classified_files,
+    }
+    json_path = output_root / "归档清单.json"
+    json_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # 人类可读版
+    lines = [
+        f"案号：{case_no}",
+        f"案由/当事人：{case_name}",
+        f"我方诉讼地位：{role}",
+        f"归档时间：{archived_at}",
+        f"文件总数：{len(classified_files)}",
+        "=" * 60,
+    ]
+    for f in classified_files:
+        side = f.get("side", "")
+        side_tag = f"[{side}] " if side and side != "待确认" else ""
+        lines.append(
+            f"第{f.get('category_id'):>2}项 {f.get('category_name', '')}　"
+            f"{side_tag}{f.get('new_name', f.get('filename', ''))}"
+        )
+        lines.append(
+            f"    依据：{f.get('method', '')} "
+            f"置信度={f.get('confidence', '')} "
+            f"原始={f.get('original_path', '')}"
+        )
+        if f.get("note"):
+            lines.append(f"    说明：{f.get('note')}")
+    txt_path = output_root / "归档清单.txt"
+    txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    return json_path

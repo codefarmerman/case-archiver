@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -18,6 +19,7 @@ from archive_engine import (
     make_output_dir,
     scan_files,
     sort_all_results,
+    write_manifest,
 )
 from auto_write import check_api_key
 from classify import Classification, Classifier
@@ -142,11 +144,17 @@ def main():
     print("\n[5/5] 生成卷内目录 ...")
     cover_path = generate_cover(output_root, args.case_no, args.case_name, classified_files)
 
+    write_manifest(
+        output_root, args.case_no, args.case_name, args.role,
+        classified_files, f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+    )
+
     # 最终报告
     print(f"\n{'='*60}")
     print("  ✓ 归档完成!")
     print(f"  输出目录: {output_root}")
     print(f"  卷内目录: {cover_path}")
+    print("  归档清单: 归档清单.json / 归档清单.txt")
     total = len([f for f in output_root.iterdir() if f.is_file()])
     print(f"  文件总数: {total} 份")
     print(f"{'='*60}\n")
