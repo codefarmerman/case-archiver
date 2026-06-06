@@ -1,0 +1,79 @@
+name: 🐞 Bug 报告
+description: 报告一个缺陷或异常行为
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题！请尽量填全以便复现。
+        ⚠️ **隐私提醒：请勿粘贴真实当事人信息、案号、文件内容或 API Key——先脱敏。**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 发生了什么？期望的行为是什么？
+      placeholder: 点击「确认归档」后……期望……实际……
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 一步步说明如何重现
+      placeholder: |
+        1. 打开 GUI / 运行 `python archive.py ...`
+        2. 选择 ……
+        3. 点击 ……
+        4. 出现错误
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志 / 报错
+      description: 粘贴 `logs/` 下日志或控制台报错（已脱敏）。会自动按代码块格式化。
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python 版本
+      placeholder: 3.12.x
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: 程序版本
+      description: 见「设置 / 关于」或 `python archive.py --version`
+      placeholder: 2.4.0
+    validations:
+      required: false
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 运行模式
+      options:
+        - 桌面 GUI
+        - 命令行
+        - 纯本地模式（不联网）
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索过现有 Issue，未发现重复
+          required: true
+        - label: 我已移除日志/截图中的真实案件信息与密钥
+          required: true

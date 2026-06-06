@@ -141,6 +141,12 @@ API Key 默认加密存储于系统凭据管理器；keyring 不可用时回退 
 
 ---
 
+## 贡献
+
+欢迎提交 Issue 与 Pull Request！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)（开发环境、自检命令、代码约定与隐私须知）。
+
+---
+
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。

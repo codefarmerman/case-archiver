@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 提问 / 讨论
+    url: https://github.com/codefarmerman/case-archiver/discussions
+    about: 使用疑问、想法交流请走 Discussions（非缺陷）
+  - name: 🔒 安全问题
+    url: https://github.com/codefarmerman/case-archiver/security/advisories/new
+    about: 涉及安全/隐私的漏洞请私下报告，勿公开 Issue
