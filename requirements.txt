@@ -1,11 +1,11 @@
 # ---- 运行时核心依赖 ----
-openai>=1.50.0          # DeepSeek（OpenAI 兼容）API
+openai>=2.41.0          # DeepSeek（OpenAI 兼容）API
 PyQt5>=5.15.11          # 桌面 GUI
-python-docx>=1.1.2      # 读写 .docx、生成卷内目录
-pdfplumber>=0.11.4      # 提取 PDF 文本
-PyYAML>=6.0.2           # 读取 categories.yaml
-openpyxl>=3.1.0         # 提取 .xlsx 内容
-keyring>=24.0           # API Key 加密存储（Windows 凭据管理器）
+python-docx>=1.2.0      # 读写 .docx、生成卷内目录
+pdfplumber>=0.11.9      # 提取 PDF 文本
+PyYAML>=6.0.3           # 读取 categories.yaml
+openpyxl>=3.1.5         # 提取 .xlsx 内容
+keyring>=25.7.0           # API Key 加密存储（Windows 凭据管理器）
 
 # ---- 可选依赖（按需手动安装，缺失时对应格式优雅降级为仅文件名分类）----
 # pywin32>=306          # 提取旧版 .doc（仅 Windows，需安装 Word）
