@@ -101,6 +101,8 @@ def test_concurrency_guard_blocks_second_classify(main_window, monkeypatch):
     main_window.on_classify()
     # worker 未被新对象替换
     assert main_window._classify_worker is fake
+    # 清理：避免 teardown 关窗时 closeEvent 因"运行中"弹模态在 offscreen 崩溃
+    main_window._classify_worker = None
 
 
 def test_close_event_blocked_when_running(main_window, monkeypatch):
@@ -132,3 +134,5 @@ def test_close_event_blocked_when_running(main_window, monkeypatch):
     main_window.closeEvent(ev)
     assert ev.accepted is False
     assert warned["called"] is True
+    # 清理：避免 teardown 关窗时 closeEvent 因"运行中"弹模态在 offscreen 崩溃
+    main_window._archive_worker = None
