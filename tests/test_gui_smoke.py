@@ -21,7 +21,12 @@ def main_window(qtbot, monkeypatch):
 
     win = gui.MainWindow()
     qtbot.addWidget(win)
-    return win
+    yield win
+    # teardown：pytest-qt 会在结束时关闭窗口触发 closeEvent。
+    # 若某测试残留了"运行中"的假 worker，closeEvent 会弹模态 QMessageBox，
+    # 在 offscreen（CI）下会触发访问冲突崩溃。这里先清空，确保安全关闭。
+    win._classify_worker = None
+    win._archive_worker = None
 
 
 def test_window_builds_and_categories_loaded(main_window):
