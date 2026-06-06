@@ -118,7 +118,7 @@ class HeaderBar(QtWidgets.QFrame):
     def __init__(self, window: QtWidgets.QMainWindow):
         super().__init__()
         self.setObjectName("headerBar")
-        self.setFixedHeight(160)  # 36 (top) + 124 (brand)
+        self.setFixedHeight(138)  # 36 (top) + 102 (brand)，收紧以让结果表格更高
         self._win = window
 
         v = QtWidgets.QVBoxLayout(self)
@@ -150,7 +150,7 @@ class HeaderBar(QtWidgets.QFrame):
         brand_area = QtWidgets.QWidget()
         brand_area.setObjectName("titleBarBrand")
         ba = QtWidgets.QHBoxLayout(brand_area)
-        ba.setContentsMargins(32, 20, 32, 20)
+        ba.setContentsMargins(32, 14, 32, 14)
         ba.setSpacing(22)
 
         logo = BrandLogo()
@@ -240,21 +240,30 @@ class ConfidenceBadge(QtWidgets.QLabel):
 
 
 class PlaceholderTable(QtWidgets.QTableWidget):
-    """空状态时在视口中央绘制提示文字。"""
+    """空状态时在视口中央绘制图标 + 提示文字，引导更友好。"""
 
+    placeholder_icon = "🗂"
     placeholder_text = "拖入案件文件夹，或点击「选择文件夹」开始分类"
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        if self.rowCount() == 0:
-            painter = QtGui.QPainter(self.viewport())
-            painter.save()
-            painter.setPen(QtGui.QColor("#8c959f"))
-            font = QtGui.QFont("Microsoft YaHei", 11)
-            painter.setFont(font)
-            painter.drawText(
-                self.viewport().rect(),
-                QtCore.Qt.AlignCenter,
-                self.placeholder_text,
-            )
-            painter.restore()
+        if self.rowCount() != 0:
+            return
+        rect = self.viewport().rect()
+        painter = QtGui.QPainter(self.viewport())
+        painter.save()
+        painter.setPen(QtGui.QColor("#afb8c1"))
+
+        # 图标（略偏上）
+        icon_font = QtGui.QFont("Segoe UI Emoji", 40)
+        painter.setFont(icon_font)
+        icon_rect = rect.adjusted(0, -28, 0, -28)
+        painter.drawText(icon_rect, QtCore.Qt.AlignCenter, self.placeholder_icon)
+
+        # 提示文字（略偏下）
+        painter.setPen(QtGui.QColor("#8c959f"))
+        text_font = QtGui.QFont("Microsoft YaHei", 11)
+        painter.setFont(text_font)
+        text_rect = rect.adjusted(0, 44, 0, 44)
+        painter.drawText(text_rect, QtCore.Qt.AlignCenter, self.placeholder_text)
+        painter.restore()

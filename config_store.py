@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 
+import secure_store
 from logger import get_logger
 
 log = get_logger()
@@ -21,6 +23,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 
 KEY_FIELD = "deepseek_api_key"          # config.json 中的历史明文字段（迁移用）
 LEGACY_KEY_FIELD = "anthropic_api_key"  # 更早期的字段
+DPAPI_KEY_FIELD = "deepseek_api_key_dpapi"  # DPAPI 加密后的字段（keyring 不可用时使用）
 ENV_VAR = "DEEPSEEK_API_KEY"
 
 # keyring 服务/用户标识
@@ -90,10 +93,19 @@ def _read() -> dict:
 
 def _write(data: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+    # 原子写入：临时文件 + os.replace，避免进程中途崩溃损坏 config.json
+    fd, tmp_name = tempfile.mkstemp(dir=str(CONFIG_DIR), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(payload)
+        os.replace(tmp_name, CONFIG_FILE)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
     try:
         os.chmod(CONFIG_FILE, 0o600)
     except Exception:
@@ -101,7 +113,8 @@ def _write(data: dict) -> None:
 
 
 def _migrate_plaintext_key() -> None:
-    """把 config.json 中的历史明文 key 迁移到 keyring，并从文件抹除。"""
+    """把 config.json 中的历史明文 key 迁移走，并从文件抹除明文。
+    优先迁移到 keyring；keyring 不可用且支持 DPAPI 时迁移为 DPAPI 密文。"""
     data = _read()
     plain = (data.get(KEY_FIELD) or data.get(LEGACY_KEY_FIELD) or "").strip()
     if not plain:
@@ -109,14 +122,24 @@ def _migrate_plaintext_key() -> None:
     if _keyring_set(plain):
         data.pop(KEY_FIELD, None)
         data.pop(LEGACY_KEY_FIELD, None)
+        data.pop(DPAPI_KEY_FIELD, None)
         _write(data)
         log.info("已将明文 API Key 迁移到系统凭据管理器，并从 config.json 抹除")
+        return
+    if secure_store.available():
+        token = secure_store.encrypt(plain)
+        if token:
+            data[DPAPI_KEY_FIELD] = token
+            data.pop(KEY_FIELD, None)
+            data.pop(LEGACY_KEY_FIELD, None)
+            _write(data)
+            log.info("已将明文 API Key 加密为 DPAPI 密文，并从 config.json 抹除明文")
 
 
 # ---------------- API Key 公开接口 ----------------
 
 def load_api_key() -> Optional[str]:
-    """优先级：环境变量 > keyring > config.json 明文（兼容旧版）。"""
+    """优先级：环境变量 > keyring > DPAPI 密文 > config.json 明文（兼容旧版）。"""
     env = os.environ.get(ENV_VAR, "").strip()
     if env:
         return env
@@ -127,8 +150,15 @@ def load_api_key() -> Optional[str]:
     if from_keyring and from_keyring.strip():
         return from_keyring.strip()
 
-    # 回退：keyring 不可用时读明文
     data = _read()
+    # DPAPI 密文
+    token = (data.get(DPAPI_KEY_FIELD) or "").strip()
+    if token:
+        dec = secure_store.decrypt(token)
+        if dec and dec.strip():
+            return dec.strip()
+
+    # 最终回退：明文（仅兼容历史/无 DPAPI 的平台）
     key = (data.get(KEY_FIELD) or data.get(LEGACY_KEY_FIELD) or "").strip()
     return key or None
 
@@ -145,31 +175,45 @@ def apply_api_key_to_env() -> Optional[str]:
 def _key_source() -> str:
     if _keyring_get():
         return "系统凭据管理器"
+    data = _read()
+    if data.get(DPAPI_KEY_FIELD):
+        return f"{CONFIG_FILE}（DPAPI 加密）"
     return str(CONFIG_FILE)
 
 
 def save_api_key(key: str) -> None:
-    """保存 API Key；优先写 keyring，失败则回退明文 config.json。"""
+    """保存 API Key；优先 keyring，其次 DPAPI 密文，最后才回退明文 config.json。"""
     key = (key or "").strip()
     if key:
         if _keyring_set(key):
-            # 确保 config.json 中没有残留明文
+            # 确保 config.json 中没有残留明文 / 密文
             data = _read()
             data.pop(KEY_FIELD, None)
             data.pop(LEGACY_KEY_FIELD, None)
+            data.pop(DPAPI_KEY_FIELD, None)
             _write(data)
             log.info("API Key 已保存到系统凭据管理器")
         else:
             data = _read()
-            data[KEY_FIELD] = key
-            _write(data)
-            log.warning("系统凭据管理器不可用，API Key 以明文保存到 %s", CONFIG_FILE)
+            token = secure_store.encrypt(key) if secure_store.available() else None
+            if token:
+                data[DPAPI_KEY_FIELD] = token
+                data.pop(KEY_FIELD, None)
+                data.pop(LEGACY_KEY_FIELD, None)
+                _write(data)
+                log.info("系统凭据管理器不可用，API Key 已用 DPAPI 加密保存到 %s", CONFIG_FILE)
+            else:
+                data[KEY_FIELD] = key
+                data.pop(DPAPI_KEY_FIELD, None)
+                _write(data)
+                log.warning("keyring 与 DPAPI 均不可用，API Key 以明文保存到 %s", CONFIG_FILE)
         os.environ[ENV_VAR] = key
     else:
         _keyring_delete()
         data = _read()
         data.pop(KEY_FIELD, None)
         data.pop(LEGACY_KEY_FIELD, None)
+        data.pop(DPAPI_KEY_FIELD, None)
         _write(data)
         os.environ.pop(ENV_VAR, None)
         log.info("API Key 已移除")
@@ -179,7 +223,9 @@ def key_storage_location() -> str:
     """供 UI 展示当前 key 的存储位置。"""
     if _keyring():
         return "系统凭据管理器（加密）"
-    return f"{CONFIG_FILE}（明文，keyring 不可用）"
+    if secure_store.available():
+        return f"{CONFIG_FILE}（DPAPI 加密，按当前 Windows 用户绑定）"
+    return f"{CONFIG_FILE}（明文，keyring 与 DPAPI 均不可用）"
 
 
 def config_file_path() -> Path:

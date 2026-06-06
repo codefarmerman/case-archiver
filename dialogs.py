@@ -7,10 +7,44 @@ from __future__ import annotations
 
 import os
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 from config_store import key_storage_location, save_api_key
 from llm_client import LLMClient
+
+
+class _TestConnectionWorker(QtCore.QThread):
+    """后台测试 DeepSeek 连接，避免阻塞 UI 线程（同步 HTTP 最长可达数十秒）。"""
+
+    # success, message
+    done = QtCore.pyqtSignal(bool, str)
+
+    def __init__(self, key: str, parent=None):
+        super().__init__(parent)
+        self._key = key
+
+    def run(self):
+        old = os.environ.get("DEEPSEEK_API_KEY")
+        os.environ["DEEPSEEK_API_KEY"] = self._key
+        try:
+            client = LLMClient()
+            if not client.ready:
+                self.done.emit(False, f"初始化失败：{client.init_error}")
+                return
+            r = client.write_document("你是测试助手，只回 OK。", "请回复 OK", max_tokens=10)
+            if r and "OK" in r.upper():
+                self.done.emit(True, "✓ 连接成功，API 工作正常")
+            elif r:
+                self.done.emit(True, f"✓ 已连通（返回：{r[:30]}）")
+            else:
+                self.done.emit(False, "✗ 调用失败，详见日志面板")
+        except Exception as e:  # noqa: BLE001  线程内兜底，确保信号一定发出
+            self.done.emit(False, f"✗ 测试异常：{e}")
+        finally:
+            if old is None:
+                os.environ.pop("DEEPSEEK_API_KEY", None)
+            else:
+                os.environ["DEEPSEEK_API_KEY"] = old
 
 
 class ApiKeyDialog(QtWidgets.QDialog):
@@ -107,27 +141,14 @@ class ApiKeyDialog(QtWidgets.QDialog):
             return
         self.btn_test.setEnabled(False)
         self._set_status("正在测试 …", info=True)
-        QtWidgets.QApplication.processEvents()
-        old = os.environ.get("DEEPSEEK_API_KEY")
-        os.environ["DEEPSEEK_API_KEY"] = key
-        try:
-            client = LLMClient()
-            if not client.ready:
-                self._set_status(f"初始化失败：{client.init_error}", err=True)
-                return
-            r = client.write_document("你是测试助手，只回 OK。", "请回复 OK", max_tokens=10)
-            if r and "OK" in r.upper():
-                self._set_status("✓ 连接成功，API 工作正常")
-            elif r:
-                self._set_status(f"✓ 已连通（返回：{r[:30]}）")
-            else:
-                self._set_status("✗ 调用失败，详见日志面板", err=True)
-        finally:
-            if old is None:
-                os.environ.pop("DEEPSEEK_API_KEY", None)
-            else:
-                os.environ["DEEPSEEK_API_KEY"] = old
-            self.btn_test.setEnabled(True)
+        # 后台线程执行，避免同步 HTTP 冻结 UI（最长可达 ~189s）
+        self._test_worker = _TestConnectionWorker(key, self)
+        self._test_worker.done.connect(self._on_test_done)
+        self._test_worker.start()
+
+    def _on_test_done(self, ok: bool, msg: str):
+        self._set_status(msg, err=not ok)
+        self.btn_test.setEnabled(True)
 
     def _on_clear(self):
         ok = QtWidgets.QMessageBox.question(

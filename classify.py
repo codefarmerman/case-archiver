@@ -5,7 +5,7 @@ classify.py — 文件分类核心模块 v2.1
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import List, Optional
 
@@ -91,6 +91,7 @@ class Classifier:
         return None
 
     def _detect_side(self, c: Classification, role: str) -> Classification:
+        """判断第 4 项我方/对方。返回新的 Classification（不就地修改入参，遵循不可变原则）。"""
         filename = c.file_path.name
         role_map = {
             "原告": ("被告",),
@@ -102,21 +103,15 @@ class Classifier:
         opponent_roles = role_map.get(role, ())
 
         if role in filename:
-            c.side = "我方"
-            c.note += f" | 角色: 我方({role}) [文件名]"
-            return c
+            return replace(c, side="我方", note=c.note + f" | 角色: 我方({role}) [文件名]")
         for opp in opponent_roles:
             if opp in filename:
-                c.side = "对方"
-                c.note += f" | 角色: 对方({opp}) [文件名]"
-                return c
+                return replace(c, side="对方", note=c.note + f" | 角色: 对方({opp}) [文件名]")
 
         # 文件名无线索：按文书类型粗判（规则来自 yaml）
         side_guess = self._side_by_doc_type(filename, role)
         if side_guess:
-            c.side = side_guess
-            c.note += f" | 角色: {side_guess} [文书类型]"
-            return c
+            return replace(c, side=side_guess, note=c.note + f" | 角色: {side_guess} [文书类型]")
 
         # 粗判不出，调用 LLM 读 PDF 前两页
         if self.llm and self.llm.ready:
@@ -126,16 +121,17 @@ class Classifier:
                 detection = self.llm.detect_side(c.file_path.name, sample, role)
                 if detection:
                     side, conf = detection
-                    c.side = side
-                    c.confidence = min(c.confidence, conf)
-                    c.note += f" | 角色: {side} [LLM conf={conf:.2f}]"
-                    return c
+                    return replace(
+                        c,
+                        side=side,
+                        confidence=min(c.confidence, conf),
+                        note=c.note + f" | 角色: {side} [LLM conf={conf:.2f}]",
+                    )
 
         # 实在判不出来
-        c.side = "待确认"
-        c.confidence = min(c.confidence, 0.5)
-        c.note += " | 角色: 待确认"
-        return c
+        return replace(
+            c, side="待确认", confidence=min(c.confidence, 0.5), note=c.note + " | 角色: 待确认"
+        )
 
     def _side_by_doc_type(self, filename: str, role: str) -> str:
         """按文书类型粗判我方/对方，规则来自 categories.yaml 第4项 side_rules。
@@ -161,10 +157,8 @@ class Classifier:
         filename = c.file_path.name
         for keyword, weight in weights.items():
             if keyword in filename:
-                c.sort_weight = weight
-                return c
-        c.sort_weight = 99
-        return c
+                return replace(c, sort_weight=weight)
+        return replace(c, sort_weight=99)
 
     def _by_content(self, file_path: Path) -> Optional[Classification]:
         """LLM 内容采样分类。"""

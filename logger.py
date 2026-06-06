@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 _LOG_DIR = Path(__file__).parent / "logs"
 _LOGGER_NAME = "case_archiver"
 _initialized = False
+_init_lock = threading.Lock()
 
 
 def _app_root() -> Path:
@@ -30,6 +32,15 @@ def get_logger() -> logging.Logger:
     if _initialized:
         return logger
 
+    # 双重检查加锁：并发首次调用（线程池工作线程）只初始化一次，避免重复添加 handler
+    with _init_lock:
+        if _initialized:
+            return logger
+        return _init_logger(logger)
+
+
+def _init_logger(logger: logging.Logger) -> logging.Logger:
+    global _initialized
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
 

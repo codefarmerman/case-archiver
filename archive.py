@@ -87,7 +87,7 @@ def main():
     print("\n  分类结果汇总:")
     for cat_id in range(1, 14):
         items = by_cat.get(cat_id, [])
-        cat_name = clf._get_cat(cat_id).get("short_name", "")
+        cat_name = clf.get_category(cat_id).get("short_name", "")
         if items:
             print(f"    第{cat_id:>2}项 {cat_name:<10} : {len(items)} 份")
         else:
@@ -130,7 +130,7 @@ def main():
     if args.auto_write and missing_items:
         print("\n  正在补写缺失文书 ...")
         new_files = auto_write_missing(
-            config_path=CONFIG_PATH,
+            config_path=None,
             by_cat=by_cat,
             sorted_results=sorted_results,
             output_root=output_root,
@@ -139,6 +139,7 @@ def main():
             case_name=args.case_name,
             llm=llm,
             on_progress=lambda msg: print(f"  {msg}"),
+            auto_cats=auto_write_cats,  # 复用分类阶段已解析的配置，避免重复读 YAML
         )
         classified_files.extend(new_files)
 

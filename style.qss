@@ -10,6 +10,13 @@ QMainWindow {
 
 QWidget#centralWidget {
     background-color: #f6f8fa;
+    border: 2px solid transparent;
+}
+
+/* 拖拽投放高亮：拖入文件夹时整窗强调边框 */
+QWidget#centralWidget[dragActive="true"] {
+    border: 2px dashed #0969da;
+    background-color: #f0f6ff;
 }
 
 /* Header bar */
@@ -222,6 +229,10 @@ QTableWidget {
 QTableWidget::item {
     padding: 4px 8px;
     border-bottom: 1px solid #eaeef2;
+}
+
+QTableWidget::item:hover {
+    background-color: #f0f6fc;
 }
 
 QTableWidget::item:selected {

@@ -73,7 +73,11 @@ def test_settings_roundtrip(cs):
     assert cs.get_setting("local_only") is True
 
 
-def test_fallback_plaintext_when_no_keyring(tmp_path, monkeypatch):
+def test_fallback_dpapi_when_no_keyring_on_windows(tmp_path, monkeypatch):
+    """keyring 不可用且支持 DPAPI（Windows）时，落盘应为密文而非明文，但可正常读回。"""
+    import secure_store
+    if not secure_store.available():
+        pytest.skip("非 Windows 平台无 DPAPI")
     import config_store
     monkeypatch.setattr(config_store, "CONFIG_DIR", tmp_path)
     monkeypatch.setattr(config_store, "CONFIG_FILE", tmp_path / "config.json")
@@ -81,7 +85,25 @@ def test_fallback_plaintext_when_no_keyring(tmp_path, monkeypatch):
     monkeypatch.setattr(config_store, "_keyring", lambda: None)  # 无 keyring
 
     config_store.save_api_key("sk-plain")
-    # 回退到明文存储
+    raw = config_store.CONFIG_FILE.read_text(encoding="utf-8")
+    # 安全：明文不得落盘，应存为 DPAPI 密文字段
+    assert "sk-plain" not in raw
+    assert "deepseek_api_key_dpapi" in raw
+    # 仍可正确读回
+    assert config_store.load_api_key() == "sk-plain"
+
+
+def test_fallback_plaintext_when_no_keyring_no_dpapi(tmp_path, monkeypatch):
+    """keyring 与 DPAPI 均不可用（如非 Windows）时，才回退明文。"""
+    import config_store
+    import secure_store
+    monkeypatch.setattr(config_store, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(config_store, "CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(config_store, "_keyring", lambda: None)  # 无 keyring
+    monkeypatch.setattr(secure_store, "available", lambda: False)  # 无 DPAPI
+
+    config_store.save_api_key("sk-plain")
     assert "sk-plain" in config_store.CONFIG_FILE.read_text(encoding="utf-8")
     assert config_store.load_api_key() == "sk-plain"
 

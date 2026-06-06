@@ -93,6 +93,8 @@ def _extract_ofd(file_path: Path, n_chars: int) -> str:
     """OFD 是 zip 容器，正文在 Doc_N/Pages/.../Content.xml 的 TextCode 节点。
     提取所有 TextCode 文本，无第三方依赖。"""
     texts: list[str] = []
+    # 单个 XML 解压上限，防御解压炸弹 / 超大 XML 耗尽内存
+    max_xml_bytes = 10 * 1024 * 1024
     with zipfile.ZipFile(str(file_path)) as zf:
         content_files = [n for n in zf.namelist() if n.lower().endswith(".xml") and "content" in n.lower()]
         # 兜底：若没有明显 Content.xml，扫描所有 xml
@@ -100,6 +102,10 @@ def _extract_ofd(file_path: Path, n_chars: int) -> str:
             content_files = [n for n in zf.namelist() if n.lower().endswith(".xml")]
         for name in content_files:
             try:
+                info = zf.getinfo(name)
+                if info.file_size > max_xml_bytes:
+                    log.warning("OFD 内 XML 过大（%d 字节），跳过：%s", info.file_size, name)
+                    continue
                 data = zf.read(name)
                 root = ET.fromstring(data)
             except Exception:
@@ -121,14 +127,32 @@ def _extract_doc(file_path: Path, n_chars: int) -> str:
         log.info(".doc 提取需要 pywin32（pip install pywin32）且安装 Word，已跳过：%s", file_path.name)
         return ""
     word = None
+    com_initialized = False
     try:
         import pythoncom  # type: ignore
         pythoncom.CoInitialize()
+        com_initialized = True
         word = win32com.client.Dispatch("Word.Application")
         word.Visible = False
-        doc = word.Documents.Open(str(file_path), ReadOnly=True)
-        text = doc.Content.Text or ""
-        doc.Close(False)
+        # 安全：强制禁用宏，防止恶意 .doc 的 AutoOpen 宏在打开时自动执行
+        try:
+            word.AutomationSecurity = 3  # msoAutomationSecurityForceDisable
+        except Exception:
+            log.warning("无法设置 Word AutomationSecurity，跳过 .doc 提取：%s", file_path.name)
+            return ""
+        doc = word.Documents.Open(
+            str(file_path.resolve()),
+            ReadOnly=True,
+            AddToRecentFiles=False,
+            ConfirmConversions=False,
+        )
+        try:
+            text = doc.Content.Text or ""
+        finally:
+            try:
+                doc.Close(False)
+            except Exception:
+                pass
         return text[:n_chars]
     except Exception as e:
         log.warning(".doc 提取失败 %s: %s", file_path.name, e)
@@ -137,6 +161,12 @@ def _extract_doc(file_path: Path, n_chars: int) -> str:
         if word is not None:
             try:
                 word.Quit()
+            except Exception:
+                pass
+        if com_initialized:
+            try:
+                import pythoncom  # type: ignore
+                pythoncom.CoUninitialize()
             except Exception:
                 pass
 

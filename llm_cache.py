@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Optional
@@ -67,9 +68,15 @@ def set(key: str, value) -> None:
                 cache.pop(old_key, None)
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            CACHE_FILE.write_text(
-                json.dumps(cache, ensure_ascii=False), encoding="utf-8"
-            )
+            # 原子写入：临时文件 + rename，避免中途崩溃损坏缓存
+            tmp = CACHE_FILE.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, CACHE_FILE)
+            # 缓存含案件文档分类元数据，限制为仅属主可读写
+            try:
+                os.chmod(CACHE_FILE, 0o600)
+            except Exception:
+                pass
         except Exception as e:
             log.warning("LLM 缓存写入失败：%s", e)
 

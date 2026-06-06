@@ -15,31 +15,49 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+_QT_PLUGIN_DIR: Optional[Path] = None  # 由 _fix_qt_plugin_path 记录，供 main 二次登记
+
 
 def _fix_qt_plugin_path() -> None:
-    """让 Qt 找到 PyQt5 自带的 platforms 插件。
-    必要原因：当 Python 解释器在非标准位置（如 uv 缓存、嵌入式 Python）时，
-    Qt 默认到解释器目录找插件会失败。本函数把环境变量指向 venv 里的实际目录。
-    必须在 import PyQt5 之前执行。
+    """让 Qt 找到 PyQt5 自带的 DLL 和 platforms 插件。
+
+    根因：平台插件 platforms/qwindows.dll 在加载时依赖 Qt5Core.dll 等位于
+    Qt5/bin 的 DLL。若不把 Qt5/bin 加入 DLL 搜索目录，qwindows.dll 会加载失败，
+    Qt 报「no Qt platform plugin could be initialized」。当 Python 解释器在非标准
+    位置（venv / uv 缓存 / 嵌入式）时尤其常见。必须在 import PyQt5 扩展模块之前执行。
     """
+    global _QT_PLUGIN_DIR
     try:
         import PyQt5  # noqa: F401  仅用于定位包路径
         pkg_dir = Path(PyQt5.__file__).resolve().parent
-        plugin_dir = pkg_dir / "Qt5" / "plugins"
+        qt_dir = pkg_dir / "Qt5"
+        plugin_dir = qt_dir / "plugins"
         if not plugin_dir.exists():
-            plugin_dir = pkg_dir / "Qt" / "plugins"
+            qt_dir = pkg_dir / "Qt"
+            plugin_dir = qt_dir / "plugins"
+        bin_dir = qt_dir / "bin"
+        if bin_dir.exists():
+            # 关键：把 Qt5/bin 加入 DLL 搜索路径，确保 qwindows.dll 的依赖可被解析
+            os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+            if hasattr(os, "add_dll_directory"):
+                try:
+                    os.add_dll_directory(str(bin_dir))
+                except OSError:
+                    pass
         if plugin_dir.exists():
             os.environ["QT_PLUGIN_PATH"] = str(plugin_dir)
             os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(plugin_dir / "platforms")
+            _QT_PLUGIN_DIR = plugin_dir
     except Exception:
         pass
 
 
 _fix_qt_plugin_path()
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-
+# 确保项目自身模块优先于同名第三方包被解析（放在所有导入之前）
 sys.path.insert(0, str(Path(__file__).parent))
+
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 from _version import __version__
 from classify import Classification
@@ -113,6 +131,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.case_dir: Optional[Path] = None
         self._classify_worker: Optional[ClassifyWorker] = None
         self._archive_worker: Optional[ArchiveWorker] = None
+        self._classify_llm: Optional[LLMClient] = None
 
         self._load_categories()
         self._build_ui()
@@ -145,6 +164,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_ui(self):
         central = QtWidgets.QWidget()
         central.setObjectName("centralWidget")
+        self.central = central  # 供拖拽高亮反馈使用
         self.setCentralWidget(central)
 
         root = QtWidgets.QVBoxLayout(central)
@@ -196,6 +216,7 @@ class MainWindow(QtWidgets.QMainWindow):
         form.addRow("案件文件夹", self._wrap(dir_row))
 
         info_layout.addLayout(form)
+        self._add_card_shadow(info_box)
         layout.addWidget(info_box)
 
         # ----- 分类结果卡片 -----
@@ -221,6 +242,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setSortingEnabled(False)  # 自定义启用，避免行错乱
         self.table.verticalHeader().setDefaultSectionSize(36)
         tb_layout.addWidget(self.table)
+        self._add_card_shadow(table_box)
         layout.addWidget(table_box, stretch=1)
 
         # ----- 操作栏 -----
@@ -271,6 +293,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.text_log.setMinimumHeight(140)
         self.text_log.setMaximumHeight(200)
         log_layout.addWidget(self.text_log)
+        self._add_card_shadow(log_box)
         layout.addWidget(log_box)
 
         # 状态栏
@@ -282,6 +305,15 @@ class MainWindow(QtWidgets.QMainWindow):
         w.setLayout(layout)
         layout.setContentsMargins(0, 0, 0, 0)
         return w
+
+    def _add_card_shadow(self, widget: QtWidgets.QWidget) -> None:
+        """给卡片加轻微投影，营造"浮起"的层次感（每个控件需独立 effect 实例）。"""
+        shadow = QtWidgets.QGraphicsDropShadowEffect(widget)
+        shadow.setBlurRadius(18)
+        shadow.setXOffset(0)
+        shadow.setYOffset(2)
+        shadow.setColor(QtGui.QColor(31, 35, 40, 38))  # 半透明深灰，克制不抢眼
+        widget.setGraphicsEffect(shadow)
 
     def _build_menu(self):
         menubar = self.menuBar()
@@ -314,7 +346,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_api_key_status(self):
         key = load_api_key()
         if key:
-            masked = key[:7] + "…" + key[-4:] if len(key) > 12 else "(已设置)"
+            # 仅显示前缀，不暴露尾部字符（日志文件会持久化，避免缩小暴力搜索空间）
+            masked = key[:7] + "…" if len(key) > 8 else "(已设置)"
             self.log_info(f"API Key 已配置：{masked}")
             self.header.status_pill.set_state("ok", "● DeepSeek 已连接")
         else:
@@ -323,15 +356,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self.header.status_pill.set_state("warn", "● 未配置 API Key")
 
     # ---------------- 拖拽支持 ----------------
+    def _set_drag_active(self, active: bool) -> None:
+        """切换投放区高亮：拖入文件夹时整窗显示虚线强调边框，提示"可松手"。"""
+        if not hasattr(self, "central"):
+            return
+        self.central.setProperty("dragActive", "true" if active else "false")
+        self.central.style().unpolish(self.central)
+        self.central.style().polish(self.central)
+
     def dragEnterEvent(self, event: QtGui.QDragEnterEvent):
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             if any(Path(u.toLocalFile()).is_dir() for u in urls):
+                self._set_drag_active(True)
                 event.acceptProposedAction()
                 return
         event.ignore()
 
+    def dragLeaveEvent(self, event: QtCore.QEvent):
+        self._set_drag_active(False)
+        super().dragLeaveEvent(event)
+
     def dropEvent(self, event: QtGui.QDropEvent):
+        self._set_drag_active(False)
         for url in event.mimeData().urls():
             p = Path(url.toLocalFile())
             if p.is_dir():
@@ -392,6 +439,13 @@ class MainWindow(QtWidgets.QMainWindow):
         return None
 
     def on_classify(self):
+        # 防御并发：上一次分类/归档未结束时拒绝再次启动，避免 QThread 被覆盖导致信号竞争
+        if self._classify_worker is not None and self._classify_worker.isRunning():
+            self.log_info("分类正在进行中，请等待完成。")
+            return
+        if self._archive_worker is not None and self._archive_worker.isRunning():
+            self.log_info("归档正在进行中，请等待完成后再分类。")
+            return
         err = self._validate_inputs()
         if err:
             QtWidgets.QMessageBox.warning(self, "信息不全", err)
@@ -552,6 +606,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_info(f"已修改：{c.file_path.name} 我方/对方 → {text or '（空）'}")
 
     def on_archive(self):
+        # 防御并发：归档或分类未结束时拒绝再次启动
+        if self._archive_worker is not None and self._archive_worker.isRunning():
+            self.log_info("归档正在进行中，请等待完成。")
+            return
+        if self._classify_worker is not None and self._classify_worker.isRunning():
+            self.log_info("分类正在进行中，请等待完成后再归档。")
+            return
         err = self._validate_inputs()
         if err:
             QtWidgets.QMessageBox.warning(self, "信息不全", err)
@@ -741,6 +802,12 @@ def main():
     get_logger()
     apply_api_key_to_env()
     _set_taskbar_app_id()
+    # 二次保险：用 Qt API 显式登记插件目录（不依赖环境变量是否被后续覆盖）
+    if _QT_PLUGIN_DIR is not None:
+        try:
+            QtCore.QCoreApplication.addLibraryPath(str(_QT_PLUGIN_DIR))
+        except Exception:
+            pass
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setStyleSheet(_load_stylesheet())
