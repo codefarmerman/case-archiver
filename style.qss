@@ -1,3 +1,17 @@
+/* ============================================================
+   设计系统 (Design Tokens) — GitHub Primer 衍生
+   ------------------------------------------------------------
+   色板
+     文本/前景   #1f2328 主文本 · #57606a 次文本 · #656d76 弱化文本(WCAG AA≥4.5)
+                 #8c959f 仅用于 disabled(对比度豁免)
+     边框        #d0d7de 默认 · #eaeef2 分隔 · #afb8c1 hover
+     背景        #ffffff 卡片 · #f6f8fa 画布/输入禁用
+     品牌/语义   #1a7f37 品牌绿 · #1f883d 主操作 · #0969da 强调蓝 · #cf222e 危险红
+     状态底      #dafbe1/#1a7f37 成功 · #fff8c5/#7d4e00 警告 · #ddf4ff/#0969da 信息
+   间距刻度 (4px 基)  4 · 8 · 12 · 16 · 20 · 24 · 32
+   圆角             6 输入/按钮 · 8 卡片 · 11 徽章 · 14 状态药丸
+   字号             9pt 说明 · 10pt 正文 · 11pt 区块标题/副标题 · 22pt 品牌标题
+   ============================================================ */
 QWidget {
     font-family: "Microsoft YaHei", "Microsoft YaHei UI", "Segoe UI", sans-serif;
     font-size: 10pt;
@@ -78,7 +92,7 @@ QGroupBox::title {
     margin-left: 12px;
     background-color: #ffffff;
     color: #1f2328;
-    font-size: 10pt;
+    font-size: 11pt;   /* 较 10pt 正文略大，强化区块层级 */
     font-weight: 600;
 }
 
@@ -94,8 +108,10 @@ QLineEdit, QComboBox {
     color: #1f2328;
 }
 
+/* 聚焦态：双色边框模拟焦点环，键盘用户可清晰定位（a11y） */
 QLineEdit:focus, QComboBox:focus {
-    border-color: #0969da;
+    border: 2px solid #0969da;
+    padding: 5px 9px;  /* 边框 +1px，padding -1px，避免聚焦时控件跳动 */
 }
 
 QLineEdit:disabled, QComboBox:disabled {
@@ -255,9 +271,9 @@ QHeaderView::section:last {
     border-right: none;
 }
 
-/* Log box - dark terminal style */
+/* Log box - dark terminal style（柔化纯黑，降低与浅色界面的对撞感）*/
 QTextEdit#logBox {
-    background-color: #0d1117;
+    background-color: #161b22;
     border: 1px solid #30363d;
     border-radius: 6px;
     color: #e6edf3;
@@ -411,10 +427,10 @@ QLabel#hintLabel {
 }
 
 QLabel#pathPlaceholder {
-    color: #8c959f;
+    color: #656d76;  /* a11y：弱化但满足 WCAG AA 对比度 */
     padding: 7px 12px;
     background-color: #f6f8fa;
-    border: 1px dashed #d0d7de;
+    border: 1px dashed #afb8c1;
     border-radius: 6px;
 }
 

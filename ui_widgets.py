@@ -138,7 +138,7 @@ class HeaderBar(QtWidgets.QFrame):
         app_label_font.setWeight(QtGui.QFont.Medium)
         app_label_font.setLetterSpacing(QtGui.QFont.AbsoluteSpacing, 1.5)
         app_label.setFont(app_label_font)
-        app_label.setStyleSheet("color: #8c959f; background: transparent;")
+        app_label.setStyleSheet("color: #656d76; background: transparent;")  # a11y 对比度
         top_h.addWidget(app_label)
         top_h.addStretch(1)
 
@@ -261,7 +261,7 @@ class PlaceholderTable(QtWidgets.QTableWidget):
         painter.drawText(icon_rect, QtCore.Qt.AlignCenter, self.placeholder_icon)
 
         # 提示文字（略偏下）
-        painter.setPen(QtGui.QColor("#8c959f"))
+        painter.setPen(QtGui.QColor("#656d76"))  # a11y：满足 WCAG AA 对比度
         text_font = QtGui.QFont("Microsoft YaHei", 11)
         painter.setFont(text_font)
         text_rect = rect.adjusted(0, 44, 0, 44)
