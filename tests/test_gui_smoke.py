@@ -27,6 +27,14 @@ def main_window(qtbot, monkeypatch):
     # 在 offscreen（CI）下会触发访问冲突崩溃。这里先清空，确保安全关闭。
     win._classify_worker = None
     win._archive_worker = None
+    # 关键：移除 GUI 挂到全局 logger 上的 Qt 日志 handler。
+    # 否则它会在后续非 GUI 测试 log 时（此窗口/QApplication 已销毁）触发已删除
+    # QObject 信号，导致 C++ 层访问冲突崩溃（try/except 无法捕获）。
+    from logger import QtLogHandler, get_logger
+    _lg = get_logger()
+    for _h in list(_lg.handlers):
+        if isinstance(_h, QtLogHandler):
+            _lg.removeHandler(_h)
 
 
 def test_window_builds_and_categories_loaded(main_window):
