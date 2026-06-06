@@ -232,9 +232,12 @@ class ConfidenceBadge(QtWidgets.QLabel):
             label = f"⚠ 低 {confidence:.2f}"
 
         self.setText(label)
+        # 给定最小宽度，避免位于两侧 stretch 之间时 sizeHint 低估 QSS padding 导致末位数字被裁切
+        # 需容纳最宽文案 "✓ 高 0.96"（图标 + 汉字 + 两位小数）
+        self.setMinimumWidth(104)
         self.setStyleSheet(
             f"background-color: {bg}; color: {fg}; border: 1px solid {border};"
-            f"border-radius: 11px; padding: 3px 12px; font-weight: 500;"
+            f"border-radius: 11px; padding: 3px 10px; font-weight: 500;"
             f"font-size: 9pt; min-height: 20px;"
         )
 

@@ -241,6 +241,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(False)  # 自定义启用，避免行错乱
         self.table.verticalHeader().setDefaultSectionSize(36)
+        # 结果表是主工作区，保证最小高度，避免被日志面板挤压到只剩一两行
+        self.table.setMinimumHeight(260)
         tb_layout.addWidget(self.table)
         self._add_card_shadow(table_box)
         layout.addWidget(table_box, stretch=1)
@@ -290,8 +292,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.text_log = QtWidgets.QTextEdit()
         self.text_log.setObjectName("logBox")
         self.text_log.setReadOnly(True)
-        self.text_log.setMinimumHeight(140)
-        self.text_log.setMaximumHeight(200)
+        # 日志为次要信息，收窄高度把垂直空间让给结果表
+        self.text_log.setMinimumHeight(96)
+        self.text_log.setMaximumHeight(140)
         log_layout.addWidget(self.text_log)
         self._add_card_shadow(log_box)
         layout.addWidget(log_box)

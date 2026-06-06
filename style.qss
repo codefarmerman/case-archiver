@@ -127,9 +127,9 @@ QComboBox::drop-down {
 
 QComboBox::down-arrow {
     image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid #57606a;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #424a53;  /* 加大加深，明确"可下拉"暗示 */
     margin-right: 10px;
     width: 0;
     height: 0;
